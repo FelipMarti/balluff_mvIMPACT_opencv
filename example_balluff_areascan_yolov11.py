@@ -1,21 +1,22 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-example_balluff_areascan_opencv.py
+example_balluff_areascan_yolov11.py
 
 Description:
     This script interfaces with Balluff cameras using the mvIMPACT Acquire SDK.
-    It captures a user-defined number of image frames, processes them (assuming 16-bit, 3-channel RGB),
-    displays them using OpenCV, and saves them with timestamped filenames.
+    It captures a user-defined number of image frames, runs YOLOv11 object detection,
+    displays annotated results using OpenCV, and saves the frames with detection overlays.
 
 Author:
     Felip Marti 2025
     fmarti@swin.edu.au
-    
+
 Dependencies:
     - mvIMPACT Acquire SDK
     - NumPy
     - OpenCV (cv2)
+    - Ultralytics YOLOv11
 
 Notes:
     - Only 16-bit, 3-channel BayerRG16 formatted images are supported.
@@ -30,6 +31,11 @@ import cv2
 from datetime import datetime
 from mvIMPACT import acquire
 from mvIMPACT.Common import exampleHelper
+from ultralytics import YOLO
+
+
+# Load YOLOv11 model
+model = YOLO('yolo11n.pt')  # Ensure this model path is correct
 
 
 def get_device():
@@ -71,7 +77,7 @@ def handle_unsupported_format(info, warning_flag):
 
 
 def display_and_save_frame(p_request):
-    """Processes, displays, and saves the image from the request with a timestamped filename."""
+    """Processes the image, applies YOLOv11 detection, and displays/saves the result."""
     image_size = p_request.imageSize.read()
     height = p_request.imageHeight.read()
     width = p_request.imageWidth.read()
@@ -95,15 +101,20 @@ def display_and_save_frame(p_request):
     arr = arr.reshape((height, width, channels))
     img_cv = cv2.convertScaleAbs(arr, alpha=(255.0 / 65535.0))
 
-    # Generate timestamped filename
-    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")[:-3]  # up to milliseconds
-    filename = f"frame_{timestamp}.png"
+    # Run YOLOv11 detection
+    results = model.predict(source=img_cv, verbose=False)
+    annotated_frame = results[0].plot()
 
-    cv2.imshow("Captured Frame", img_cv)
-    cv2.imwrite(filename, img_cv)
+    # Timestamped filename
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")[:-3]
+    filename = f"frame_{timestamp}_yolo.png"
+
+    # Display and save
+    cv2.imshow("YOLOv11 Detection", annotated_frame)
+    cv2.imwrite(filename, annotated_frame)
     cv2.waitKey(1)
 
-    return img_cv, None
+    return annotated_frame, None
 
 
 def capture_frames(p_dev, frame_count):
